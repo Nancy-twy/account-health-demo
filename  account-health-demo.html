@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Account Health Early Warning</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f7f1e8;
+    --panel:#fffdf8;
+    --panel-2:#f3ebdf;
+    --line:#e4d9c8;
+    --text:#33291f;
+    --muted:#8d7f6d;
+    --accent:#9a5b2e;
+    --accent-dim:#c8a482;
+    --amber:#b07a1f;
+    --red:#bf4d33;
+    --green:#5f8a4a;
+    --mono:'JetBrains Mono',ui-monospace,monospace;
+    --sans:'Space Grotesk',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh}
+  a{color:var(--accent)}
+
+  .wrap{max-width:1080px;margin:0 auto;padding:32px 20px 80px}
+
+  header{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:28px}
+  .brand{font-family:var(--mono);font-size:12px;color:var(--accent);letter-spacing:.12em;text-transform:uppercase}
+  h1{font-size:clamp(22px,4vw,32px);font-weight:600;letter-spacing:-.01em;margin-top:6px}
+  .sub{color:var(--muted);font-size:14px;margin-top:6px;max-width:560px;line-height:1.5}
+  .run-meta{font-family:var(--mono);font-size:11px;color:var(--muted);text-align:right;line-height:1.8}
+  .run-meta b{color:var(--text);font-weight:500}
+
+  .strip{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:28px}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+  .stat .k{font-family:var(--mono);font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+  .stat .v{font-size:26px;font-weight:600;margin-top:6px;font-variant-numeric:tabular-nums}
+  .stat .v small{font-size:13px;color:var(--muted);font-weight:400}
+  .stat.red .v{color:var(--red)}
+  .stat.amber .v{color:var(--amber)}
+  .stat.green .v{color:var(--green)}
+
+  .controls{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;align-items:center}
+  .chip{font-family:var(--mono);font-size:12px;padding:6px 14px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--muted);cursor:pointer;transition:.15s}
+  .chip:hover{border-color:var(--accent-dim);color:var(--text)}
+  .chip.active{background:var(--panel-2);border-color:var(--accent);color:var(--accent)}
+  .controls .right{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--muted)}
+
+  .accounts{display:flex;flex-direction:column;gap:10px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;transition:border-color .15s}
+  .card:hover{border-color:#d3c3ab}
+  .card{box-shadow:0 1px 3px rgba(80,60,35,.05)}
+  .card.open{border-color:var(--accent-dim)}
+  .card-head{display:grid;grid-template-columns:14px 1.6fr 1fr 1fr 1fr 90px 24px;gap:14px;align-items:center;padding:16px 18px;cursor:pointer}
+  .tier-dot{width:10px;height:10px;border-radius:50%}
+  .tier-dot.red{background:var(--red);box-shadow:0 0 0 4px rgba(191,77,51,.15)}
+  .tier-dot.amber{background:var(--amber)}
+  .tier-dot.green{background:var(--green)}
+  .acct-name{font-weight:600;font-size:15px}
+  .acct-meta{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:3px}
+  .metric{font-family:var(--mono);font-size:12px;color:var(--muted)}
+  .metric b{display:block;color:var(--text);font-size:14px;font-weight:500;font-variant-numeric:tabular-nums;margin-bottom:2px}
+  .metric .down{color:var(--red)}
+  .metric .up{color:var(--green)}
+  .spark{height:32px;width:100%}
+  .caret{color:var(--muted);font-family:var(--mono);transition:transform .2s}
+  .card.open .caret{transform:rotate(90deg)}
+
+  .card-body{display:none;border-top:1px solid var(--line);background:var(--panel-2);padding:18px}
+  .card.open .card-body{display:block}
+  .assess-label{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11px;color:var(--accent);text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px}
+  .assess-label::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--accent);animation:pulse 2s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+  .assess{font-size:14px;line-height:1.65;color:var(--text);max-width:720px}
+  .assess p+p{margin-top:8px}
+  .signals{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}
+  .sig{font-family:var(--mono);font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--line);color:var(--muted)}
+  .sig.hot{border-color:rgba(191,77,51,.35);color:var(--red);background:rgba(191,77,51,.05)}
+  .sig.warm{border-color:rgba(176,122,31,.35);color:var(--amber);background:rgba(176,122,31,.05)}
+  .next{margin-top:14px;padding:12px 14px;border-left:2px solid var(--accent);background:rgba(154,91,46,.07);border-radius:0 8px 8px 0;font-size:13.5px;line-height:1.6}
+  .next b{color:var(--accent);font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.08em;display:block;margin-bottom:4px;font-weight:600}
+
+  .footerbar{margin-top:36px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:20px}
+  .footerbar p{font-size:12.5px;color:var(--muted);line-height:1.6;max-width:640px}
+  .btn{font-family:var(--mono);font-size:12px;padding:9px 16px;border-radius:8px;border:1px solid var(--accent-dim);background:transparent;color:var(--accent);cursor:pointer;white-space:nowrap}
+  .btn:hover{background:rgba(154,91,46,.08)}
+
+  dialog{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:14px;max-width:680px;width:calc(100% - 40px);padding:0;box-shadow:0 20px 50px rgba(60,42,25,.18)}
+  dialog::backdrop{background:rgba(55,42,28,.35)}
+  .dlg-head{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--line)}
+  .dlg-head h2{font-size:15px;font-weight:600}
+  .dlg-head button{background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer}
+  .dlg-body{padding:20px;max-height:60vh;overflow:auto}
+  .dlg-body pre{font-family:var(--mono);font-size:12px;line-height:1.7;color:var(--muted);white-space:pre-wrap}
+
+  @media (max-width:820px){
+    .strip{grid-template-columns:repeat(2,1fr)}
+    .card-head{grid-template-columns:12px 1fr 80px 20px;gap:10px}
+    .card-head .hide-m{display:none}
+  }
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div>
+      <h1>Account Health Early Warning</h1>
+      <p class="sub">Weekly portfolio scan. Usage telemetry, ticket language, and touchpoint history scored by an LLM before churn signals become churn.</p>
+    </div>
+    <div class="run-meta">
+      last scan <b>Mon · 07:00 PT</b><br>
+      scoring prompt <b>v3</b> · model <b>claude-sonnet-4-6</b><br>
+      accounts scanned <b>8</b> · runtime <b>41s</b>
+    </div>
+  </header>
+
+  <div class="strip">
+    <div class="stat red"><div class="k">At risk</div><div class="v">2</div></div>
+    <div class="stat amber"><div class="k">Watch</div><div class="v">2</div></div>
+    <div class="stat green"><div class="k">Healthy</div><div class="v">4</div></div>
+    <div class="stat"><div class="k">Portfolio usage / wk</div><div class="v">1.2M <small>▲ 5.8%</small></div></div>
+  </div>
+
+  <div class="controls">
+    <button class="chip active" data-tier="all">All</button>
+    <button class="chip" data-tier="red">At risk</button>
+    <button class="chip" data-tier="amber">Watch</button>
+    <button class="chip" data-tier="green">Healthy</button>
+    <span class="right">click an account for the assessment</span>
+  </div>
+
+  <div class="accounts" id="accounts"></div>
+
+  <div class="footerbar">
+    <p>Prototype by Nancy Tu. All account data is synthetic. Assessments were generated by Claude from the synthetic telemetry using the scoring prompt shown here. Built to demonstrate how an AI-assisted health scan changes what a CS team catches, and when.</p>
+    <button class="btn" onclick="document.getElementById('promptDlg').showModal()">View scoring prompt</button>
+  </div>
+
+</div>
+
+<dialog id="promptDlg">
+  <div class="dlg-head">
+    <h2>Scoring prompt · v3</h2>
+    <button onclick="document.getElementById('promptDlg').close()">✕</button>
+  </div>
+  <div class="dlg-body">
+<pre>
+You are the customer success analyst for a B2B software
+company with usage-based revenue. You review one account
+per call and return a risk assessment.
+
+Account data provided
+- 8 weeks of product usage volume
+- open and recent support tickets with excerpts
+- last meaningful touchpoint and who attended
+- contract stage, renewal date, plan tier
+
+Risk signals to weigh, in priority order
+1. Usage trend against the account's own baseline, not
+   the portfolio average. A small account that doubled
+   is healthier than a large one that dropped 15%.
+2. Ticket language. Flag pricing questions, performance
+   complaints, "evaluating alternatives", or silence
+   after a previously active thread.
+3. Stakeholder drift. Champion went quiet, key contact
+   changed roles, procurement suddenly in the room.
+4. Adoption stall. Contract signed but usage never
+   ramped past onboarding volume.
+
+Return JSON
+{ tier: green | amber | red,
+  headline: one sentence a founder can read in 3 seconds,
+  reasoning: 2-3 sentences citing the specific data,
+  signals: array of short tags,
+  next_action: the single highest-leverage move this week,
+  owner: csm | founder | eng }
+
+Do not hedge. If the data is ambiguous, say what is
+missing and what would resolve it.
+</pre>
+  </div>
+</dialog>
+
+<script>
+// ── Edit this block to tailor the demo to a specific company ──
+// Account names, metrics, and assessment copy all live here.
+const USAGE_LABEL = "usage events / wk";
+const PERF_LABEL = "p95 response";
+
+const accounts=[
+ {
+  name:"Northgate", meta:"Enterprise · annual · renews Sep 2026",
+  tier:"red", usage:"142K", trend:"▼ 31% / 4wk", trendDir:"down", perf:"180ms",
+  spark:[86,84,81,74,66,58,52,48],
+  signals:[{t:"usage down 4 straight wks",c:"hot"},{t:"ticket mentions pricing",c:"hot"},{t:"champion silent 19 days",c:"warm"}],
+  assess:"Northgate's weekly usage is down from a 200K baseline, and the decline is consistent rather than seasonal. Their last ticket asked how billing behaves if they split traffic across vendors, which reads like an active cost comparison. The champion who ran the original rollout has not opened the shared channel in 19 days.",
+  next:"Founder-level call this week, not a routine check-in. Bring their own ROI numbers from onboarding and ask directly what changed. If they are benchmarking a competitor, we want to be in that conversation, not discovered after it.",
+  owner:"founder"
+ },
+ {
+  name:"Halden Group", meta:"Mid-market · annual · renews Nov 2026",
+  tier:"red", usage:"9.4K", trend:"flat since signing", trendDir:"down", perf:"165ms",
+  spark:[30,31,29,30,32,30,31,30],
+  signals:[{t:"never ramped past onboarding",c:"hot"},{t:"blocked on their side",c:"warm"},{t:"renewal in 5 months",c:"warm"}],
+  assess:"Halden signed three months ago but weekly usage is flat at onboarding volume, which means the production rollout never happened. Their tickets are healthy in tone but all reference the same internal blocker, a migration their own platform team owns. This is not dissatisfaction, it is a stalled deployment that will look like low value at renewal time.",
+  next:"Offer a working session with their platform team to unblock the migration. Engineering time spent here converts directly into renewal safety. Set a concrete go-live date on the call.",
+  owner:"eng"
+ },
+ {
+  name:"Meridian Co", meta:"Enterprise · annual · renews Mar 2027",
+  tier:"amber", usage:"287K", trend:"▲ 4% / 4wk", trendDir:"up", perf:"120ms",
+  spark:[70,74,73,78,80,82,84,86],
+  signals:[{t:"new team lead onboarding",c:"warm"},{t:"security review open",c:"warm"}],
+  assess:"Usage is strong and growing. The risk is organizational. Their new team lead inherited the deployment without context, and an open security review thread has sat unanswered on their side for two weeks. Healthy accounts lose momentum in exactly this kind of handoff.",
+  next:"Thirty-minute onboarding session for the new lead covering their own deployment, then close out the security thread with a written summary they can forward internally.",
+  owner:"csm"
+ },
+ {
+  name:"Bluepine", meta:"Mid-market · annual · renews Aug 2026",
+  tier:"amber", usage:"38K", trend:"▼ 9% / 4wk", trendDir:"down", perf:"240ms",
+  spark:[52,55,50,49,47,46,45,44],
+  signals:[{t:"performance degrading",c:"warm"},{t:"usage soft decline",c:"warm"}],
+  assess:"A slow bleed rather than a cliff. Usage is drifting down 2 to 3 percent weekly and response times have degraded as their data volume grew, which their last ticket noticed. Neither number alone is alarming, but the combination of degrading performance and softening usage is how quiet churn starts.",
+  next:"Proactive performance-tuning session before they ask. Shipping a measurable improvement back to them reverses the narrative from degrading to improving, and gives the CSM a reason to review usage goals on the same call.",
+  owner:"csm"
+ },
+ {
+  name:"Corvus Systems", meta:"Enterprise · annual · renews Jan 2027",
+  tier:"green", usage:"310K", trend:"▲ 18% / 4wk", trendDir:"up", perf:"95ms",
+  spark:[40,46,52,60,68,77,86,96],
+  signals:[{t:"expansion candidate",c:""},{t:"two new workspaces this month",c:""}],
+  assess:"Fastest-growing account in the portfolio. Corvus added two new workspaces this month and usage is compounding 4 to 5 percent weekly. Ticket volume is low and technical. They are pushing the product into a pattern the docs do not fully cover yet, which is product signal worth capturing.",
+  next:"Ask for a reference call or case study while momentum is high, and route their usage pattern to product as structured feedback.",
+  owner:"csm"
+ },
+ {
+  name:"Arroyo Partners", meta:"Pilot · converts Oct 2026",
+  tier:"green", usage:"96K", trend:"▲ 11% / 4wk", trendDir:"up", perf:"130ms",
+  spark:[44,48,50,55,58,61,64,68],
+  signals:[{t:"conversion on track",c:""}],
+  assess:"Steady ramp with engaged stakeholders on both technical and business sides. Their pilot converts to a paid contract in October and current trajectory supports it. Recent tickets are feature requests rather than problems.",
+  next:"Start the conversion conversation in August rather than October. Draft the success summary now while the wins are fresh.",
+  owner:"csm"
+ },
+ {
+  name:"Fernwell", meta:"Mid-market · annual · renews Dec 2026",
+  tier:"green", usage:"71K", trend:"▲ 3% / 4wk", trendDir:"up", perf:"110ms",
+  spark:[58,59,60,60,62,62,63,64],
+  signals:[{t:"stable",c:""}],
+  assess:"Quietly healthy. Consistent usage, fast ticket resolution, champion active in the shared channel. No action needed beyond the normal cadence, and over-touching a stable account carries its own cost.",
+  next:"Standard monthly usage review. Nothing to escalate.",
+  owner:"csm"
+ },
+ {
+  name:"Kestrel Labs", meta:"Mid-market · annual · renews Feb 2027",
+  tier:"green", usage:"64K", trend:"▲ 7% / 4wk", trendDir:"up", perf:"105ms",
+  spark:[38,40,44,45,48,50,53,55],
+  signals:[{t:"healthy ramp",c:""},{t:"multi-team rollout",c:""}],
+  assess:"Growing across two internal teams at once, which usually indicates the rollout is owned by an organization rather than one person. Ticket history shows they read the docs before asking, and their questions are getting more advanced over time. A textbook healthy ramp.",
+  next:"Invite them to the next customer roundtable. Multi-team rollouts make good community anchors.",
+  owner:"csm"
+ }
+];
+// ── End of editable block ──
+
+function sparkline(data,dir){
+  const w=120,h=32,max=Math.max(...data),min=Math.min(...data);
+  const pts=data.map((v,i)=>`${(i/(data.length-1))*w},${h-4-((v-min)/(max-min||1))*(h-8)}`).join(" ");
+  const color=dir==="down"?"var(--red)":"var(--green)";
+  return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round"/></svg>`;
+}
+
+const tierName={red:"At risk",amber:"Watch",green:"Healthy"};
+const ownerName={csm:"CSM",founder:"Founder",eng:"Engineering"};
+
+function render(filter){
+  const el=document.getElementById("accounts");
+  el.innerHTML=accounts
+   .filter(a=>filter==="all"||a.tier===filter)
+   .map((a,i)=>`
+    <div class="card" data-i="${i}">
+      <div class="card-head" onclick="this.parentElement.classList.toggle('open')">
+        <span class="tier-dot ${a.tier}"></span>
+        <div>
+          <div class="acct-name">${a.name}</div>
+          <div class="acct-meta">${a.meta}</div>
+        </div>
+        <div class="metric hide-m"><b>${a.usage}</b>${USAGE_LABEL}</div>
+        <div class="metric hide-m"><b class="${a.trendDir}">${a.trend}</b>trend</div>
+        <div class="metric hide-m"><b>${a.perf}</b>${PERF_LABEL}</div>
+        ${sparkline(a.spark,a.trendDir)}
+        <span class="caret">›</span>
+      </div>
+      <div class="card-body">
+        <div class="assess-label">Claude assessment · ${tierName[a.tier]}</div>
+        <div class="assess"><p>${a.assess}</p></div>
+        <div class="signals">${a.signals.map(s=>`<span class="sig ${s.c}">${s.t}</span>`).join("")}</div>
+        <div class="next"><b>Next action · owner ${ownerName[a.owner]}</b>${a.next}</div>
+      </div>
+    </div>`).join("");
+}
+
+document.querySelectorAll(".chip").forEach(c=>c.addEventListener("click",()=>{
+  document.querySelectorAll(".chip").forEach(x=>x.classList.remove("active"));
+  c.classList.add("active");
+  render(c.dataset.tier);
+}));
+
+render("all");
+</script>
+</body>
+</html>
